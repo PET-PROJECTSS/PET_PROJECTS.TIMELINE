@@ -43,6 +43,7 @@ jobs:
             Ветка: ${{ github.ref }}
             Коммит: ${{ github.event.head_commit.message }}
             Автор: ${{ github.actor }}
+            Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Notify Telegram (failure)
         if: failure()
