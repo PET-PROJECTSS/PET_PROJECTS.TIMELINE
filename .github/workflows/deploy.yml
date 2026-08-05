@@ -49,3 +49,4 @@ jobs:
             Репозиторий: ${{ github.repository }}
             Ветка: ${{ github.ref }}
             Автор: ${{ github.actor }}
+            Лог: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

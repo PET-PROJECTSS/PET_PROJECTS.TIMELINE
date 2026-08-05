@@ -46,7 +46,7 @@ jobs:
       - name: Migrations
         run: alembic upgrade head
       - name: Pytest
-        run: pytest tests -q
+        run: PYTHONPATH=. pytest tests -q
 
   docker:
     runs-on: ubuntu-latest
