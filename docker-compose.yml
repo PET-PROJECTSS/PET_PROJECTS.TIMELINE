@@ -17,6 +17,8 @@ services:
   app:
     build: .
     restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
     environment:
       ENV: prod
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-timeline}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:-timeline}
@@ -39,23 +41,5 @@ services:
       timeout: 5s
       retries: 5
 
-  proxy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN:?задайте DOMAIN в .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      app:
-        condition: service_healthy
-
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:
