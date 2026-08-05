@@ -1,7 +1,10 @@
 __pycache__/
 *.pyc
 *.db
+*.log
 .venv/
 .idea/
 .env
 credentials.json
+.pytest_cache/
+.ruff_cache/
