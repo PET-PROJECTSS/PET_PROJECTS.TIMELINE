@@ -19,8 +19,14 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            set -e
+            mkdir -p /opt/projects/timeline
             cd /opt/projects/timeline
-            git pull origin main
+            if [ ! -d .git ]; then
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git pull origin main
+            fi
             docker compose pull
             docker compose up -d
             docker compose exec -T app alembic upgrade head
