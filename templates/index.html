@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Roadmap Builder</title>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+    <div class="login-screen" id="loginScreen">
+        <form class="login-card" id="loginForm" novalidate>
+            <div class="logo-mini" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="15" width="8" height="8" rx="2.4" stroke="currentColor" stroke-width="2.2" />
+                    <rect x="17" y="5" width="8" height="8" rx="2.4" stroke="currentColor" stroke-width="2.2" />
+                    <path d="M11 19H17M14 19V13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                </svg>
+            </div>
+            <h1>Roadmap Builder</h1>
+            <p>Войдите, чтобы открыть схемы</p>
+            <input class="templates-name" id="loginUsername" type="text" placeholder="Логин" autocomplete="username" spellcheck="false" />
+            <input class="templates-name" id="loginPassword" type="password" placeholder="Пароль" autocomplete="current-password" />
+            <p class="login-error" id="loginError"></p>
+            <button class="btn btn-primary" type="submit" id="loginSubmit">Войти</button>
+        </form>
+    </div>
+    <div class="app-shell">
+        <div class="topbar">
+            <div class="brand-mini">
+                <div class="logo-mini" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="3" y="15" width="8" height="8" rx="2.4" stroke="currentColor" stroke-width="2.2" />
+                        <rect x="17" y="5" width="8" height="8" rx="2.4" stroke="currentColor" stroke-width="2.2" />
+                        <path d="M11 19H17M14 19V13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                    </svg>
+                </div>
+                <span>Roadmap Sandbox</span>
+            </div>
+
+            <div class="template-select" id="templateSelect">
+                <button class="template-select-btn" id="templatesBtn" type="button" aria-expanded="false" title="Список шаблонов" aria-label="Список шаблонов">
+                    <span id="currentTemplateName">Загрузка…</span>
+                    <span class="btn-badge" id="templateCount">0</span>
+                    <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+
+                <div class="templates-panel" id="templatesPanel" aria-label="Список шаблонов">
+                    <div class="templates-head">
+                        <input class="templates-name" id="templateNameInput" type="text" placeholder="Название шаблона" spellcheck="false" />
+                        <button class="icon-btn templates-new" id="newTemplateBtn" type="button" title="Новый шаблон" aria-label="Новый шаблон">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                        </button>
+                    </div>
+                    <ul class="templates-list" id="templatesList"></ul>
+                </div>
+            </div>
+
+            <section class="action-panel" aria-label="Основные действия">
+                <button class="btn btn-primary" id="addRootBtn" type="button">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                    Новый этап
+                </button>
+                <button class="btn btn-secondary" id="centerBtn" type="button">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12H8M16 12H20M12 4V8M12 16V20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="2.2"/></svg>
+                    Центрировать
+                </button>
+                <button class="btn btn-secondary" id="themeBtn" data-theme-toggle type="button" aria-label="Сменить тему">
+                    <span id="themeIcon" aria-hidden="true"></span>
+                    Тема
+                </button>
+                <button class="btn btn-ghost" id="logoutBtn" type="button" title="Выйти из аккаунта">
+                    <span id="userRoleLabel">…</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </section>
+        </div>
+
+        <main class="canvas-wrap" id="canvasWrap" aria-label="Бесконечная карта">
+            <div class="canvas-grid-layer" id="canvasGridLayer"></div>
+            <svg class="canvas-overlay link-layer" id="linkLayer" aria-hidden="true">
+                <defs>
+                    <marker id="arrowhead" markerWidth="14" markerHeight="11" refX="11" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+                        <polygon points="0 0, 14 5.5, 0 11" fill="color-mix(in srgb, var(--color-primary) 75%, var(--color-text) 25%)" />
+                    </marker>
+                    <marker id="arrowhead-preview" markerWidth="14" markerHeight="11" refX="11" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+                        <polygon points="0 0, 14 5.5, 0 11" fill="var(--color-warning)" />
+                    </marker>
+                </defs>
+            </svg>
+            <div class="canvas-content" id="canvasContent"></div>
+            <div class="canvas-overlay" id="linkLabels"></div>
+        </main>
+
+        <aside class="inspector" aria-label="Сводка карты">
+            <div>
+                <h2>Живая схема пути</h2>
+                <p>Интерактивный прототип: бесконечная сетка, перетаскивание блоков за любое место, стрелки направления, растягивание и все горячие клавиши.</p>
+            </div>
+            <div class="stats">
+                <div class="stat"><strong id="statNodes">0</strong><span>Этапов</span></div>
+                <div class="stat"><strong id="statLinks">0</strong><span>Связей</span></div>
+                <div class="stat"><strong id="statTheme">Dark</strong><span>Тема</span></div>
+            </div>
+            <div class="progress-block" aria-label="Общий прогресс">
+                <div class="progress-head">
+                    <span>Прогресс</span>
+                    <strong id="progressLabel">0/0 · 0%</strong>
+                </div>
+                <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+            </div>
+            <div class="legend">
+                <span class="chip"><strong>Goal</strong> главная цель</span>
+                <span class="chip"><strong>Path</strong> промежуточный шаг</span>
+                <span class="chip"><strong>ETA</strong> срок перехода</span>
+            </div>
+        </aside>
+
+        <aside class="mini-map" aria-label="Миникарта">
+            <header>
+                <span>Обзор карты</span>
+                <span id="zoomLabel">100%</span>
+            </header>
+            <svg id="miniMapSvg" viewBox="0 0 320 150" preserveAspectRatio="none"></svg>
+        </aside>
+    </div>
+
+    <template id="nodeTemplate">
+        <article class="node" data-node>
+            <div class="node-header">
+                <div class="node-header-main">
+                    <span class="node-type" data-type-toggle>Path</span>
+                    <textarea class="node-title" rows="1" placeholder="Название этапа" spellcheck="false"></textarea>
+                </div>
+                <div class="node-actions">
+                    <button class="icon-btn connect-btn" type="button" aria-label="Связать этап" title="Связать с другим этапом">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10.5 13.5L13.5 10.5M8.5 7.5L6 10A4 4 0 0 0 11.66 15.66L14 13.32M15.5 16.5L18 14A4 4 0 1 0 12.34 8.34L10 10.68" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button class="icon-btn complete-btn" type="button" aria-label="Отметить выполненным" title="Отметить выполненным">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L9.5 17L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button class="icon-btn delete-btn" type="button" aria-label="Удалить этап" title="Удалить этап">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7H20M9 7V5.8C9 5.358 9.358 5 9.8 5H14.2C14.642 5 15 5.358 15 5.8V7M7.5 7V18.2C7.5 18.642 7.858 19 8.3 19H15.7C16.142 19 16.5 18.642 16.5 18.2V7M10 10.5V15.5M14 10.5V15.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    </button>
+                </div>
+            </div>
+            <textarea class="node-text" placeholder="Комментарий, идея, заметка по этапу" spellcheck="false"></textarea>
+            <div class="node-meta">
+                <label class="meta-field">
+                    <span>Срок</span>
+                    <input class="node-date" type="text" placeholder="например: до июня 2027" spellcheck="false" />
+                </label>
+                <label class="meta-field">
+                    <span>Переход</span>
+                    <input class="node-duration" type="text" placeholder="например: 6 месяцев" spellcheck="false" />
+                </label>
+            </div>
+            <div class="node-footer">
+                <div class="node-status">В работе</div>
+            </div>
+            <button class="add-handle" type="button" aria-label="Добавить следующий этап" title="Добавить следующий этап">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="resize-handle" data-resize-handle title="Тяни чтобы изменить размер">
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M14 2L2 14M14 8L8 14M14 14H2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+        </article>
+    </template>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
