@@ -23,8 +23,7 @@ jobs:
             git pull origin main
             docker compose pull
             docker compose up -d
-            # если нужны миграции:
-            # docker compose exec -T app alembic upgrade head
+            docker compose exec -T app alembic upgrade head
 
       - name: Notify Telegram (success)
         if: success()
