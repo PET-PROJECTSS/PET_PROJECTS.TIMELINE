@@ -1,0 +1,143 @@
+# TIMELINE — Goal Roadmap Builder
+
+Визуальный конструктор дорожной карты (roadmap): цели, этапы, связи и сроки
+на канвасе. Single-page приложение, бэкенд — FastAPI + SQLAlchemy.
+
+## Стек
+
+- **Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic
+- **DB:** PostgreSQL 16 (в prod / docker-compose), SQLite для локальной разработки
+- **Deploy:** Docker + docker-compose, gunicorn (UvicornWorker)
+- **Quality:** ruff, pytest, GitHub Actions CI
+
+## Быстрый старт (Docker + PostgreSQL)
+
+```sh
+cp .env.example .env        # задайте POSTGRES_PASSWORD, TIMELINE_ADMIN_PASSWORD, TIMELINE_OBSERVER_PASSWORD, DOMAIN
+docker compose up --build
+```
+
+Caddy отдаёт приложение на `http://localhost` / `https://localhost` (для локальной
+проверки). Для боевого деплоя укажите в `.env` `DOMAIN=ваш-домен` — Caddy
+выпустит Let's Encrypt-сертификат автоматически. Postgres поднимается сервисом
+`db`, миграции применяются при старте контейнера `app` (`alembic upgrade head`).
+
+## Локальная разработка (SQLite)
+
+```sh
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements-dev.txt
+python app\main.py          # http://127.0.0.1:8000 (reload в dev)
+```
+
+По умолчанию используется файл `roadmaps.db` в корне проекта. При первом старте
+приложение само применяет миграции (`alembic upgrade head`), создаёт начальный
+roadmap и пользователей (пароли берутся из env).
+
+## Конфигурация
+
+Все переменные — в `.env.example`. Ключевые:
+
+| Переменная | Описание |
+|---|---|
+| `DATABASE_URL` | DSN базы (`postgresql+psycopg://...` или `sqlite:///...`) |
+| `DOMAIN` | Домен приложения снаружи (для Caddy/TLS, Let's Encrypt) |
+| `FORWARDED_ALLOW_IPS` | Доверенные прокси для `X-Forwarded-For` (за Caddy — `*`) |
+| `TIMELINE_ADMIN_USER` / `TIMELINE_ADMIN_PASSWORD` | Администратор (полный доступ) |
+| `TIMELINE_OBSERVER_USER` / `TIMELINE_OBSERVER_PASSWORD` | Наблюдатель (только просмотр) |
+| `TIMELINE_LOGIN_MAX_ATTEMPTS` / `TIMELINE_LOGIN_LOCKOUT_SECONDS` | Rate-limit входа |
+| `TIMELINE_MAX_PAYLOAD_BYTES` | Лимит тела запроса |
+
+В prod-окружении пароли обязательны (иначе `RuntimeError`); в dev при отсутствии
+env-переменной генерируется разовый пароль и выводится в лог.
+
+Смена пароля = изменение `TIMELINE_ADMIN_PASSWORD` / `TIMELINE_OBSERVER_PASSWORD`
+в `.env` и рестарт контейнера: `seed()` синхронизирует пароли и роли с
+конфигурацией (не трогает их, только если значение совпадает). Legacy-хэши
+(старый формат/итерации) автоматически перехешируются на PBKDF2-SHA256 600k.
+
+## Prod-заметки
+
+- **Запуск:** в prod `seed()` выполняется один раз в `docker-entrypoint.sh`
+  (после `alembic upgrade head`) — до старта воркеров gunicorn, без гонок.
+- **Ресайз воркеров:** gunicorn перезапускает воркер через каждые
+  `GUNICORN_MAX_REQUESTS` (по умолчанию 1000, `GUNICORN_MAX_REQUESTS_JITTER`
+  рандомизирует момент) — защита от утечек памяти.
+- **Лимит тела:** приложение отвергает запросы > `TIMELINE_MAX_PAYLOAD_BYTES`
+  (в т.ч. без `Content-Length`); Caddy дополнительно режет тело на 3 МБ
+  (`request_body` в Caddyfile).
+- **Бэкапы:** боевые данные — в volume `pgdata`. Регулярно снимайте дампы,
+  например: `docker compose exec db pg_dump -U timeline timeline | gzip > backup-$(date +%F).sql.gz`.
+- **Логи:** `app` пишет запросы и ошибки в stdout (docker logs). Настройте
+  ротацию/сбор логов на уровне оркестрации.
+- **Обновление:** `docker compose up --build --pull` — миграции применятся
+  автоматически при старте `app`.
+- **Шрифты:** Satoshi/General Sans подгружаются с внешнего CDN Fontshare
+  (единственный сторонний запрос). Для закрытых сетей — скачайте шрифты
+  локально и обновите `index.html`/CSP (`style-src`/`font-src`).
+
+## Миграции
+
+```sh
+alembic upgrade head        # применить
+alembic revision --autogenerate -m "description"   # новая миграция
+```
+
+В prod миграции выполняются автоматически в `docker-entrypoint.sh`; при локальной
+разработке их применяет `seed()` при старте приложения. Схема управляется **только**
+через Alembic (без `create_all`).
+
+## Зависимости
+
+Версии зафиксированы через `pip-tools` (детерминированные сборки):
+
+```sh
+pip install pip-tools
+pip-compile requirements.in          # обновить requirements.txt
+pip-compile requirements-dev.in      # обновить requirements-dev.txt
+```
+
+## Тесты и линт
+
+```sh
+ruff check .
+pytest tests -q             # CI гоняет тесты против PostgreSQL-сервиса
+```
+
+## Структура
+
+```
+app/
+  main.py        # FastAPI, lifespan, middleware, /api/health
+  config.py      # конфигурация из env
+  db.py          # engine, seed(), _sync_users
+  models.py      # Roadmap, User, LoginSession, LoginAttempt
+  payload.py     # default_payload, миграция schema v1 → v2
+  security.py    # PBKDF2-хэши, токены
+  auth.py        # сессии и роли
+  limiter.py     # rate-limit входа на БД
+  routers/       # /api/auth, /api/roadmaps
+alembic/         # миграции
+templates/       # frontend (canvas)
+static/          # статика
+tests/           # pytest
+```
+
+## API
+
+| Метод | Путь | Доступ | Описание |
+|---|---|---|---|
+| POST | `/api/auth/login` | публичный | Вход, возвращает bearer-токен |
+| POST | `/api/auth/logout` | авторизованный | Завершение сессии |
+| GET | `/api/auth/me` | авторизованный | Текущий пользователь и роль |
+| GET | `/api/roadmaps` | авторизованный | Список roadmap (сводки) |
+| GET | `/api/roadmaps/{id}` | авторизованный | Детали roadmap |
+| POST | `/api/roadmaps` | admin | Создать roadmap |
+| PUT | `/api/roadmaps/{id}` | admin | Обновить (конфликт → 409 по `base_version`) |
+| DELETE | `/api/roadmaps/{id}` | admin | Удалить |
+| GET | `/api/health` | публичный | Health-check (БД) |
+
+## Лицензия
+
+MIT — см. [LICENSE](LICENSE).
