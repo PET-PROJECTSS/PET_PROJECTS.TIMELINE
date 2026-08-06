@@ -243,6 +243,7 @@
                     done: !!n.done,
                     width: n.width || DEFAULT_NODE_WIDTH,
                     height: n.height || DEFAULT_NODE_HEIGHT,
+                    substeps: copySubsteps(n.substeps),
                 }));
                 state.links = (payload.links || []).map(l => ({ ...l }));
                 state.uid = payload.uid || state.nodes.length;
@@ -322,10 +323,14 @@
                 if (open) refreshTemplates();
             }
 
+            const copySubsteps = (steps) => (steps || []).map(s => ({ id: s.id, title: s.title || '', done: !!s.done }));
+            const copyNode = (n) => ({ ...n, substeps: copySubsteps(n.substeps) });
+            const snapshotNodes = () => state.nodes.map(copyNode);
+
             const pushUndo = () => {
                 if (state.readOnly) return;
                 const snapshot = {
-                    nodes: state.nodes.map(n => ({ ...n })),
+                    nodes: snapshotNodes(),
                     links: state.links.map(l => ({ ...l })),
                     uid: state.uid,
                 };
@@ -338,7 +343,7 @@
             const undo = () => {
                 if (state.readOnly || !state.undoStack.length) return false;
                 const current = {
-                    nodes: state.nodes.map(n => ({ ...n })),
+                    nodes: snapshotNodes(),
                     links: state.links.map(l => ({ ...l })),
                     uid: state.uid,
                 };
@@ -361,7 +366,7 @@
             const redo = () => {
                 if (state.readOnly || !state.redoStack.length) return false;
                 const current = {
-                    nodes: state.nodes.map(n => ({ ...n })),
+                    nodes: snapshotNodes(),
                     links: state.links.map(l => ({ ...l })),
                     uid: state.uid,
                 };
@@ -429,6 +434,8 @@
 
             function getNodeById(id) { return state.nodes.find(node => node.id === id); }
 
+            function nodeTypeLabel(node) { return node.type === 'Goal' ? 'Цель' : 'Этап'; }
+
             function getNodeCenter(node) {
                 return { x: node.x + node.width / 2, y: node.y + node.height / 2 };
             }
@@ -468,16 +475,61 @@
                     el.classList.toggle('is-done', !!node.done);
 
                     const typeEl = el.querySelector('.node-type');
-                    typeEl.textContent = node.type;
+                    typeEl.textContent = nodeTypeLabel(node);
                     if (node.type === 'Goal') {
                         typeEl.style.color = '#59c690';
                         typeEl.style.background = 'rgba(89,198,144,0.15)';
+                    } else {
+                        typeEl.style.color = '';
+                        typeEl.style.background = '';
                     }
 
                     el.querySelector('.node-title').value = node.title;
                     el.querySelector('.node-text').value = node.note;
                     el.querySelector('.node-date').value = node.due;
                     el.querySelector('.node-duration').value = node.duration;
+
+                    const substepsBox = el.querySelector('.node-substeps');
+                    const isGoal = node.type === 'Goal';
+                    substepsBox.style.display = isGoal ? 'none' : '';
+                    const steps = node.substeps || [];
+                    const doneSteps = steps.filter(s => s.done).length;
+                    const stepsTitle = el.querySelector('.node-substeps-title');
+                    stepsTitle.textContent = steps.length ? `Подэтапы ${doneSteps}/${steps.length}` : 'Подэтапы';
+                    const stepsList = el.querySelector('.node-substeps-list');
+                    stepsList.innerHTML = '';
+                    steps.forEach(step => {
+                        const li = document.createElement('li');
+                        li.className = 'substep' + (step.done ? ' is-done' : '');
+                        li.dataset.substep = step.id;
+
+                        const toggle = document.createElement('button');
+                        toggle.type = 'button';
+                        toggle.className = 'substep-toggle';
+                        toggle.setAttribute('aria-label', step.done ? 'Снять отметку' : 'Отметить выполненным');
+                        toggle.title = step.done ? 'Снять отметку' : 'Отметить выполненным';
+                        toggle.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L9.5 17L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                        if (state.readOnly) toggle.disabled = true;
+
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'substep-title';
+                        input.value = step.title;
+                        input.placeholder = 'Название подэтапа';
+                        input.spellcheck = false;
+                        if (state.readOnly) input.readOnly = true;
+
+                        const del = document.createElement('button');
+                        del.type = 'button';
+                        del.className = 'substep-delete';
+                        del.title = 'Удалить подэтап';
+                        del.setAttribute('aria-label', 'Удалить подэтап');
+                        del.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+                        if (state.readOnly) del.disabled = true;
+
+                        li.append(toggle, input, del);
+                        stepsList.appendChild(li);
+                    });
 
                     if (state.readOnly) {
                         el.querySelectorAll('.node-title, .node-text, .node-date, .node-duration').forEach(f => f.readOnly = true);
@@ -673,6 +725,46 @@
                 showToast(node.done ? '✅ Этап выполнен' : '↩️ Этап снова в работе');
             }
 
+            function syncNodeDoneFromSubsteps(node) {
+                const steps = node.substeps || [];
+                if (steps.length > 0) {
+                    node.done = steps.every(s => s.done);
+                }
+            }
+
+            function addSubstep(nodeId) {
+                if (state.readOnly) return;
+                const node = getNodeById(nodeId);
+                if (!node || node.type === 'Goal') return;
+                pushUndo();
+                node.substeps = [...(node.substeps || []), { id: `step-${++state.uid}`, title: '', done: false }];
+                syncNodeDoneFromSubsteps(node);
+                requestRender();
+            }
+
+            function toggleSubstep(nodeId, stepId) {
+                if (state.readOnly) return;
+                const node = getNodeById(nodeId);
+                if (!node) return;
+                const step = (node.substeps || []).find(s => s.id === stepId);
+                if (!step) return;
+                pushUndo();
+                step.done = !step.done;
+                syncNodeDoneFromSubsteps(node);
+                requestRender();
+                showToast(step.done ? '✅ Подэтап выполнен' : '↩️ Подэтап снова в работе');
+            }
+
+            function removeSubstep(nodeId, stepId) {
+                if (state.readOnly) return;
+                const node = getNodeById(nodeId);
+                if (!node) return;
+                pushUndo();
+                node.substeps = (node.substeps || []).filter(s => s.id !== stepId);
+                syncNodeDoneFromSubsteps(node);
+                requestRender();
+            }
+
             function deselectAll() {
                 if (state.selectedNodeId === null && state.selectedLinkId === null) return;
                 state.selectedNodeId = null;
@@ -699,12 +791,13 @@
                         .innerHeight * 0.45).y,
                     width: DEFAULT_NODE_WIDTH,
                     height: DEFAULT_NODE_HEIGHT,
-                    title: originNode ? 'Новый путь' : 'Новая цель',
+                    title: originNode ? 'Новый этап' : 'Новая цель',
                     type: originNode ? 'Path' : 'Goal',
                     done: false,
                     note: 'Опиши шаг, условия и критерии перехода.',
                     due: '',
-                    duration: originNode ? '2 месяца' : ''
+                    duration: originNode ? '2 месяца' : '',
+                    substeps: []
                 };
                 state.nodes.push(newNode);
                 if (originNode) {
@@ -756,6 +849,7 @@
                 }
                 if (field === 'type') {
                     if (value === 'Goal') {
+                        node.substeps = [];
                         const incomingLinks = state.links.filter(l => l.to === nodeId);
                         if (incomingLinks.length > 1) {
                             const toRemove = incomingLinks.slice(1);
@@ -829,7 +923,10 @@
                     el.closest('.connect-btn') ||
                     el.closest('.complete-btn') ||
                     el.closest('[data-resize-handle]') ||
-                    el.closest('.node-type');
+                    el.closest('.node-type') ||
+                    el.closest('.substep-add') ||
+                    el.closest('.substep-toggle') ||
+                    el.closest('.substep-delete');
             }
 
             function isFormField(el) {
@@ -917,6 +1014,26 @@
                         event.preventDefault();
                         event.stopPropagation();
                         toggleNodeType(nodeId);
+                        return;
+                    }
+                    if (event.target.closest('.substep-add') && nodeId) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        addSubstep(nodeId);
+                        return;
+                    }
+                    if (event.target.closest('.substep-toggle') && nodeId) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const stepEl = event.target.closest('[data-substep]');
+                        if (stepEl) toggleSubstep(nodeId, stepEl.dataset.substep);
+                        return;
+                    }
+                    if (event.target.closest('.substep-delete') && nodeId) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const stepEl = event.target.closest('[data-substep]');
+                        if (stepEl) removeSubstep(nodeId, stepEl.dataset.substep);
                         return;
                     }
                     return;
@@ -1179,6 +1296,10 @@
                         const labelEl = linkLabels.querySelector(`[data-link-label="${link.id}"]`);
                         if (labelEl) labelEl.textContent = link.label;
                     }
+                } else if (event.target.classList.contains('substep-title')) {
+                    const stepEl = event.target.closest('[data-substep]');
+                    const step = (node.substeps || []).find(s => s.id === stepEl?.dataset.substep);
+                    if (step) step.title = value;
                 }
                 scheduleSave();
             });
@@ -1237,7 +1358,7 @@
                     if (state.selectedNodeId) {
                         const node = getNodeById(state.selectedNodeId);
                         if (node) {
-                            state.clipboard = { ...node };
+                            state.clipboard = copyNode(node);
                             showToast('📋 Этап скопирован (Ctrl+V чтобы вставить)');
                         }
                     }
@@ -1249,7 +1370,7 @@
                     if (state.clipboard) {
                         pushUndo();
                         const newNode = {
-                            ...state.clipboard,
+                            ...copyNode(state.clipboard),
                             id: createId(),
                             x: state.clipboard.x + 60,
                             y: state.clipboard.y + 60,

@@ -13,6 +13,12 @@ class Viewport(BaseModel):
     scale: float = Field(default=1, ge=0.1, le=10)
 
 
+class Substep(BaseModel):
+    id: str
+    title: str = ""
+    done: bool = False
+
+
 class Node(BaseModel):
     id: str
     x: float
@@ -25,12 +31,23 @@ class Node(BaseModel):
     note: str = ""
     due: str = ""
     duration: str = ""
+    substeps: list[Substep] = []
 
     @field_validator("type")
     @classmethod
     def check_type(cls, v: str) -> str:
         if v not in ("Path", "Goal"):
             raise ValueError("node.type должен быть Path или Goal")
+        return v
+
+    @field_validator("substeps")
+    @classmethod
+    def check_substeps(cls, v: list[Substep], info) -> list[Substep]:
+        if info.data.get("type") == "Goal" and v:
+            raise ValueError("Goal-узел не может содержать подэтапы")
+        ids = [step.id for step in v]
+        if len(ids) != len(set(ids)):
+            raise ValueError("В узле дублируются id подэтапов")
         return v
 
 

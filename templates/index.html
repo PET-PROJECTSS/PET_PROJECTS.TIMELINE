@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Roadmap Builder</title>
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=3" />
+    <link rel="stylesheet" href="/static/css/style.css?v=4" />
 </head>
 <body>
     <div class="login-screen" id="loginScreen">
@@ -109,11 +109,6 @@
                 </div>
                 <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
             </div>
-            <div class="legend">
-                <span class="chip"><strong>Goal</strong> главная цель</span>
-                <span class="chip"><strong>Path</strong> промежуточный шаг</span>
-                <span class="chip"><strong>ETA</strong> срок перехода</span>
-            </div>
         </aside>
 
         <aside class="mini-map" aria-label="Миникарта">
@@ -129,7 +124,7 @@
         <article class="node" data-node>
             <div class="node-header">
                 <div class="node-header-main">
-                    <span class="node-type" data-type-toggle>Path</span>
+                    <span class="node-type" data-type-toggle title="Нажмите, чтобы изменить тип">Этап</span>
                     <textarea class="node-title" rows="1" placeholder="Название этапа" spellcheck="false"></textarea>
                 </div>
                 <div class="node-actions">
@@ -155,6 +150,15 @@
                     <input class="node-duration" type="text" placeholder="например: 6 месяцев" spellcheck="false" />
                 </label>
             </div>
+            <div class="node-substeps">
+                <div class="node-substeps-head">
+                    <span class="node-substeps-title">Подэтапы</span>
+                    <button class="substep-add" type="button" title="Добавить подэтап" aria-label="Добавить подэтап">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+                    </button>
+                </div>
+                <ul class="node-substeps-list"></ul>
+            </div>
             <div class="node-footer">
                 <div class="node-status">В работе</div>
             </div>
@@ -167,6 +171,6 @@
         </article>
     </template>
 
-    <script src="/static/js/app.js?v=3"></script>
+    <script src="/static/js/app.js?v=4"></script>
 </body>
 </html>

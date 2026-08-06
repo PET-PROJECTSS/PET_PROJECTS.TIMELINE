@@ -9,7 +9,7 @@ logger = logging.getLogger("roadmap")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV = os.getenv("ENV", "dev")
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",

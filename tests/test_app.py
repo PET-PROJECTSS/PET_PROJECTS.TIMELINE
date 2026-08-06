@@ -339,3 +339,82 @@ def test_expired_session(client, admin_headers):
     session.commit()
     session.close()
     assert client.get("/api/auth/me", headers=admin_headers).status_code == 401
+
+
+def test_substeps_roundtrip(client, admin_headers):
+    p = _payload()
+    p["nodes"][0]["substeps"] = [
+        {"id": "s1", "title": "Собрать документы", "done": False},
+        {"id": "s2", "title": "Оформить загранпаспорт", "done": True},
+    ]
+    rid = _create(client, admin_headers, payload=p)["id"]
+    got = client.get(f"/api/roadmaps/{rid}", headers=admin_headers).json()
+    node = next(n for n in got["payload"]["nodes"] if n["id"] == p["nodes"][0]["id"])
+    assert node["substeps"] == [
+        {"id": "s1", "title": "Собрать документы", "done": False},
+        {"id": "s2", "title": "Оформить загранпаспорт", "done": True},
+    ]
+
+
+def test_substeps_rejected_on_goal(client, admin_headers):
+    p = _payload()
+    goal = next(n for n in p["nodes"] if n["type"] == "Goal")
+    goal["substeps"] = [{"id": "s1", "title": "Недопустимо", "done": False}]
+    r = client.post("/api/roadmaps", headers=admin_headers,
+                    json={"name": "bad", "payload": p})
+    assert r.status_code == 422
+
+
+def test_substeps_duplicate_ids_rejected(client, admin_headers):
+    p = _payload()
+    p["nodes"][0]["substeps"] = [
+        {"id": "s1", "title": "Первый", "done": False},
+        {"id": "s1", "title": "Дубликат", "done": False},
+    ]
+    r = client.post("/api/roadmaps", headers=admin_headers,
+                    json={"name": "bad", "payload": p})
+    assert r.status_code == 422
+
+
+def test_migrates_v2_payload_with_substeps(client, admin_headers):
+    old = {
+        "schema_version": 2,
+        "nodes": [
+            {"id": "n1", "x": 0, "y": 0, "width": 320, "height": 200,
+             "title": "Документы", "type": "Path", "done": False,
+             "note": "", "due": "", "duration": "",
+             "substeps": [
+                 {"id": "a", "title": "Загранпаспорт", "done": 1},
+                 {"id": "b", "title": "Апостиль", "done": 0},
+                 {"id": "b", "title": "Дубликат", "done": False},
+                 {"title": "Без id", "done": False},
+                 "мусор",
+             ]},
+            {"id": "n2", "x": 100, "y": 100, "width": 320, "height": 200,
+             "title": "Купить квартиру", "type": "Goal", "done": False,
+             "note": "", "due": "", "duration": "",
+             "substeps": [{"id": "x", "title": "Должно быть удалено", "done": False}]},
+        ],
+        "links": [],
+        "viewport": {"panX": 0, "panY": 0, "scale": 1},
+        "uid": 2,
+    }
+    session = SessionLocal()
+    rm = Roadmap(name="Старый", payload=old, version=0)
+    session.add(rm)
+    session.commit()
+    rid = rm.id
+    session.close()
+
+    seed()
+
+    got = client.get(f"/api/roadmaps/{rid}", headers=admin_headers).json()
+    p = got["payload"]
+    assert p["schema_version"] == SCHEMA_VERSION
+    nodes = {n["id"]: n for n in p["nodes"]}
+    assert nodes["n1"]["substeps"] == [
+        {"id": "a", "title": "Загранпаспорт", "done": True},
+        {"id": "b", "title": "Апостиль", "done": False},
+        {"id": "step-3", "title": "Без id", "done": False},
+    ]
+    assert nodes["n2"]["substeps"] == []

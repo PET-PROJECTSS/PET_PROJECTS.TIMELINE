@@ -21,7 +21,12 @@ def default_payload() -> dict[str, Any]:
             {"id": "node-3", "x": 470, "y": 340, "width": 320, "height": 200,
              "title": "Выбрать район и объект", "type": "Path",
              "note": "Сравнить ЖК, транспорт, платежи, сроки сдачи.",
-             "due": "лето 2027", "duration": "3 месяца"},
+             "due": "лето 2027", "duration": "3 месяца",
+             "substeps": [
+                 {"id": "step-1", "title": "Сравнить жилые комплексы", "done": True},
+                 {"id": "step-2", "title": "Проверить транспорт и инфраструктуру", "done": False},
+                 {"id": "step-3", "title": "Рассчитать ежемесячный платёж", "done": False},
+             ]},
             {"id": "node-4", "x": 900, "y": 195, "width": 320, "height": 200,
              "title": "Купить квартиру", "type": "Goal",
              "note": "Главная цель. Выход на сделку, оформление ипотеки, переезд.",
@@ -34,6 +39,29 @@ def default_payload() -> dict[str, Any]:
         ],
         "viewport": {"panX": 0, "panY": 0, "scale": 1},
     }
+
+
+def _migrate_substeps(node: dict[str, Any]) -> list[dict[str, Any]]:
+    substeps = node.get("substeps")
+    if not isinstance(substeps, list):
+        return []
+    clean: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for step in substeps:
+        if not isinstance(step, dict):
+            continue
+        sid = str(step.get("id") or "")
+        if not sid:
+            sid = f"step-{len(clean) + 1}"
+        if sid in seen:
+            continue
+        seen.add(sid)
+        clean.append({
+            "id": sid,
+            "title": str(step.get("title") or ""),
+            "done": bool(step.get("done")),
+        })
+    return clean
 
 
 def migrate_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -85,5 +113,17 @@ def migrate_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
             "scale": viewport.get("scale", 1),
         }
         out.setdefault("uid", 0)
+    if current < 3:
+        nodes: list[dict[str, Any]] = []
+        for node in out.get("nodes", []):
+            if not isinstance(node, dict):
+                continue
+            migrated_node: dict[str, Any] = dict(node)
+            if str(migrated_node.get("type", "Path")).lower() == "goal":
+                migrated_node["substeps"] = []
+            else:
+                migrated_node["substeps"] = _migrate_substeps(migrated_node)
+            nodes.append(migrated_node)
+        out["nodes"] = nodes
     out["schema_version"] = SCHEMA_VERSION
     return out, changed
