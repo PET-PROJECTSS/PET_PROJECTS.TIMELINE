@@ -327,7 +327,14 @@
                 if (open) refreshTemplates();
             }
 
-            const copySubsteps = (steps) => (steps || []).map(s => ({ id: s.id, title: s.title || '', done: !!s.done }));
+            const copySubsteps = (steps) => (steps || []).map(s => ({
+                id: s.id,
+                title: s.title || '',
+                note: s.note || '',
+                done: !!s.done,
+                x: typeof s.x === 'number' ? s.x : undefined,
+                y: typeof s.y === 'number' ? s.y : undefined,
+            }));
             const copyNode = (n) => ({ ...n, substeps: copySubsteps(n.substeps) });
             const snapshotNodes = () => state.nodes.map(copyNode);
 
@@ -500,6 +507,49 @@
                     const doneSteps = steps.filter(s => s.done).length;
                     const stepsTitle = el.querySelector('.node-substeps-title');
                     stepsTitle.textContent = steps.length ? `Подэтапы ${doneSteps}/${steps.length}` : 'Подэтапы';
+                    const isExpanded = !!node.substepsExpanded;
+                    const expandBtn = el.querySelector('.substep-expand');
+                    expandBtn.classList.toggle('is-active', isExpanded);
+                    expandBtn.title = isExpanded ? 'Свернуть подэтапы внутрь' : 'Развернуть подэтапы на карту';
+                    expandBtn.setAttribute('aria-label', expandBtn.title);
+                    if (state.readOnly) expandBtn.disabled = true;
+                    const stepsList = el.querySelector('.node-substeps-list');
+                    stepsList.innerHTML = '';
+                    stepsList.style.display = isExpanded ? 'none' : '';
+                    if (!isExpanded) {
+                        steps.forEach(step => {
+                            const li = document.createElement('li');
+                            li.className = 'substep' + (step.done ? ' is-done' : '');
+                            li.dataset.substep = step.id;
+
+                            const toggle = document.createElement('button');
+                            toggle.type = 'button';
+                            toggle.className = 'substep-toggle';
+                            toggle.setAttribute('aria-label', step.done ? 'Снять отметку' : 'Отметить выполненным');
+                            toggle.title = step.done ? 'Снять отметку' : 'Отметить выполненным';
+                            toggle.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L9.5 17L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                            if (state.readOnly) toggle.disabled = true;
+
+                            const input = document.createElement('input');
+                            input.type = 'text';
+                            input.className = 'substep-title';
+                            input.value = step.title;
+                            input.placeholder = 'Название подэтапа';
+                            input.spellcheck = false;
+                            if (state.readOnly) input.readOnly = true;
+
+                            const del = document.createElement('button');
+                            del.type = 'button';
+                            del.className = 'substep-delete';
+                            del.title = 'Удалить подэтап';
+                            del.setAttribute('aria-label', 'Удалить подэтап');
+                            del.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+                            if (state.readOnly) del.disabled = true;
+
+                            li.append(toggle, input, del);
+                            stepsList.appendChild(li);
+                        });
+                    }
 
                     if (state.readOnly) {
                         el.querySelectorAll('.node-title, .node-text, .node-date, .node-duration').forEach(f => f.readOnly = true);
@@ -589,11 +639,11 @@
                 const steps = node.substeps || [];
                 const count = steps.length;
                 const totalH = count * SUBSTEP_NODE_HEIGHT + (count - 1) * SUBSTEP_GAP_Y;
-                const cardX = node.x + node.width + SUBSTEP_GAP_X;
-                const startY = node.y + node.height / 2 - totalH / 2;
+                const baseX = node.x + node.width + SUBSTEP_GAP_X;
+                const baseY = node.y + node.height / 2 - totalH / 2;
                 const cards = steps.map((s, i) => ({
-                    x: cardX,
-                    y: startY + i * (SUBSTEP_NODE_HEIGHT + SUBSTEP_GAP_Y),
+                    x: typeof s.x === 'number' ? s.x : baseX,
+                    y: typeof s.y === 'number' ? s.y : baseY + i * (SUBSTEP_NODE_HEIGHT + SUBSTEP_GAP_Y),
                     w: SUBSTEP_NODE_WIDTH,
                     h: SUBSTEP_NODE_HEIGHT,
                 }));
@@ -674,7 +724,7 @@
                 canvasContent.querySelectorAll('[data-substep-card]').forEach(el => el.remove());
                 state.nodes.forEach(node => {
                     const steps = node.substeps || [];
-                    if (node.type === 'Goal' || !steps.length) return;
+                    if (node.type === 'Goal' || !steps.length || !node.substepsExpanded) return;
                     const layout = substepLayout(node);
                     steps.forEach((step, i) => {
                         const card = buildSubstepCard(step, node.id);
@@ -693,7 +743,7 @@
                 const svgNS = 'http://www.w3.org/2000/svg';
                 state.nodes.forEach(node => {
                     const steps = node.substeps || [];
-                    if (node.type === 'Goal' || !steps.length) return;
+                    if (node.type === 'Goal' || !steps.length || !node.substepsExpanded) return;
                     const layout = substepLayout(node);
                     steps.forEach((step, i) => {
                         const card = layout.cards[i];
@@ -859,6 +909,23 @@
                 requestRender();
             }
 
+            function toggleSubstepsExpanded(nodeId) {
+                if (state.readOnly) return;
+                const node = getNodeById(nodeId);
+                if (!node || node.type === 'Goal') return;
+                pushUndo();
+                node.substepsExpanded = !node.substepsExpanded;
+                if (node.substepsExpanded) {
+                    const layout = substepLayout(node);
+                    (node.substeps || []).forEach((step, i) => {
+                        if (typeof step.x !== 'number') step.x = layout.cards[i].x;
+                        if (typeof step.y !== 'number') step.y = layout.cards[i].y;
+                    });
+                }
+                requestRender();
+                scheduleSave();
+            }
+
             function toggleSubstep(nodeId, stepId) {
                 if (state.readOnly) return;
                 const node = getNodeById(nodeId);
@@ -967,6 +1034,7 @@
                 if (field === 'type') {
                     if (value === 'Goal') {
                         node.substeps = [];
+                        node.substepsExpanded = false;
                         const incomingLinks = state.links.filter(l => l.to === nodeId);
                         if (incomingLinks.length > 1) {
                             const toRemove = incomingLinks.slice(1);
@@ -1042,7 +1110,9 @@
                     el.closest('[data-resize-handle]') ||
                     el.closest('.node-type') ||
                     el.closest('.substep-add') ||
-                    el.closest('.node-type');
+                    el.closest('.substep-expand') ||
+                    el.closest('.substep-toggle') ||
+                    el.closest('.substep-delete');
             }
 
             function isFormField(el) {
@@ -1089,6 +1159,20 @@
                     if (state.readOnly) return;
                     if (!event.target.closest('.node-title') && !event.target.closest('.node-text')) {
                         selectNode(parentId);
+                        const node = getNodeById(parentId);
+                        const step = (node?.substeps || []).find(s => s.id === stepId);
+                        if (step) {
+                            state.potentialSubstepDrag = {
+                                nodeId: parentId,
+                                stepId,
+                                pointerId: event.pointerId,
+                                startX: event.clientX,
+                                startY: event.clientY,
+                                stepStartX: typeof step.x === 'number' ? step.x : 0,
+                                stepStartY: typeof step.y === 'number' ? step.y : 0,
+                            };
+                            try { substepEl.setPointerCapture(event.pointerId); } catch (e) {}
+                        }
                     }
                     return;
                 }
@@ -1159,6 +1243,26 @@
                         event.preventDefault();
                         event.stopPropagation();
                         addSubstep(nodeId);
+                        return;
+                    }
+                    if (event.target.closest('.substep-expand') && nodeId) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleSubstepsExpanded(nodeId);
+                        return;
+                    }
+                    if (event.target.closest('.substep-toggle') && nodeId) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const stepEl = event.target.closest('[data-substep]');
+                        if (stepEl) toggleSubstep(nodeId, stepEl.dataset.substep);
+                        return;
+                    }
+                    if (event.target.closest('.substep-delete') && nodeId) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const stepEl = event.target.closest('[data-substep]');
+                        if (stepEl) removeSubstep(nodeId, stepEl.dataset.substep);
                         return;
                     }
                     return;
@@ -1283,6 +1387,38 @@
                     return;
                 }
 
+                if (state.substepDrag && state.substepDrag.pointerId === event.pointerId) {
+                    const node = getNodeById(state.substepDrag.nodeId);
+                    const step = (node?.substeps || []).find(s => s.id === state.substepDrag.stepId);
+                    if (!node || !step) return;
+                    step.x = state.substepDrag.stepStartX + (event.clientX - state.substepDrag.startX) / state.scale;
+                    step.y = state.substepDrag.stepStartY + (event.clientY - state.substepDrag.startY) / state.scale;
+                    const card = canvasContent.querySelector(`[data-substep-card][data-parent="${node.id}"][data-substep="${step.id}"]`);
+                    if (card) card.classList.add('is-dragging');
+                    refreshSubsteps(node.id);
+                    renderMiniMap();
+                    return;
+                }
+
+                if (state.potentialSubstepDrag && state.potentialSubstepDrag.pointerId === event.pointerId) {
+                    const dx = event.clientX - state.potentialSubstepDrag.startX;
+                    const dy = event.clientY - state.potentialSubstepDrag.startY;
+                    if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+                        pushUndo();
+                        state.substepDrag = {
+                            nodeId: state.potentialSubstepDrag.nodeId,
+                            stepId: state.potentialSubstepDrag.stepId,
+                            pointerId: state.potentialSubstepDrag.pointerId,
+                            startX: state.potentialSubstepDrag.startX,
+                            startY: state.potentialSubstepDrag.startY,
+                            stepStartX: state.potentialSubstepDrag.stepStartX,
+                            stepStartY: state.potentialSubstepDrag.stepStartY,
+                        };
+                        state.potentialSubstepDrag = null;
+                    }
+                    return;
+                }
+
                 if (state.potentialDrag && state.potentialDrag.pointerId === event.pointerId) {
                     const dx = event.clientX - state.potentialDrag.startX;
                     const dy = event.clientY - state.potentialDrag.startY;
@@ -1372,6 +1508,18 @@
                     return;
                 }
 
+                if (state.substepDrag && state.substepDrag.pointerId === event.pointerId) {
+                    state.substepDrag = null;
+                    requestRender();
+                    scheduleSave();
+                    return;
+                }
+
+                if (state.potentialSubstepDrag && state.potentialSubstepDrag.pointerId === event.pointerId) {
+                    state.potentialSubstepDrag = null;
+                    return;
+                }
+
                 if (state.potentialDrag && state.potentialDrag.pointerId === event.pointerId) {
                     const nodeEl = canvasContent.querySelector(`[data-id="${state.potentialDrag.id}"]`);
                     if (nodeEl && isFormField(event.target)) {
@@ -1440,6 +1588,10 @@
                         const labelEl = linkLabels.querySelector(`[data-link-label="${link.id}"]`);
                         if (labelEl) labelEl.textContent = link.label;
                     }
+                } else if (event.target.classList.contains('substep-title')) {
+                    const stepEl = event.target.closest('[data-substep]');
+                    const step = (node.substeps || []).find(s => s.id === stepEl?.dataset.substep);
+                    if (step) step.title = value;
                 }
                 scheduleSave();
             });
