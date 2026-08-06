@@ -38,6 +38,10 @@
             const MIN_NODE_WIDTH = 220;
             const MIN_NODE_HEIGHT = 150;
             const DRAG_THRESHOLD = 4;
+            const SUBSTEP_CARD_WIDTH = 210;
+            const SUBSTEP_CARD_HEIGHT = 46;
+            const SUBSTEP_GAP_X = 46;
+            const SUBSTEP_GAP_Y = 10;
 
             const state = {
                 theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
@@ -496,40 +500,6 @@
                     const doneSteps = steps.filter(s => s.done).length;
                     const stepsTitle = el.querySelector('.node-substeps-title');
                     stepsTitle.textContent = steps.length ? `Подэтапы ${doneSteps}/${steps.length}` : 'Подэтапы';
-                    const stepsList = el.querySelector('.node-substeps-list');
-                    stepsList.innerHTML = '';
-                    steps.forEach(step => {
-                        const li = document.createElement('li');
-                        li.className = 'substep' + (step.done ? ' is-done' : '');
-                        li.dataset.substep = step.id;
-
-                        const toggle = document.createElement('button');
-                        toggle.type = 'button';
-                        toggle.className = 'substep-toggle';
-                        toggle.setAttribute('aria-label', step.done ? 'Снять отметку' : 'Отметить выполненным');
-                        toggle.title = step.done ? 'Снять отметку' : 'Отметить выполненным';
-                        toggle.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L9.5 17L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-                        if (state.readOnly) toggle.disabled = true;
-
-                        const input = document.createElement('input');
-                        input.type = 'text';
-                        input.className = 'substep-title';
-                        input.value = step.title;
-                        input.placeholder = 'Название подэтапа';
-                        input.spellcheck = false;
-                        if (state.readOnly) input.readOnly = true;
-
-                        const del = document.createElement('button');
-                        del.type = 'button';
-                        del.className = 'substep-delete';
-                        del.title = 'Удалить подэтап';
-                        del.setAttribute('aria-label', 'Удалить подэтап');
-                        del.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
-                        if (state.readOnly) del.disabled = true;
-
-                        li.append(toggle, input, del);
-                        stepsList.appendChild(li);
-                    });
 
                     if (state.readOnly) {
                         el.querySelectorAll('.node-title, .node-text, .node-date, .node-duration').forEach(f => f.readOnly = true);
@@ -615,6 +585,114 @@
                 }
             }
 
+            function substepLayout(node) {
+                const steps = node.substeps || [];
+                const count = steps.length;
+                const totalH = count * SUBSTEP_CARD_HEIGHT + (count - 1) * SUBSTEP_GAP_Y;
+                const cardX = node.x + node.width + SUBSTEP_GAP_X;
+                const startY = node.y + node.height / 2 - totalH / 2;
+                const cards = steps.map((s, i) => ({
+                    x: cardX,
+                    y: startY + i * (SUBSTEP_CARD_HEIGHT + SUBSTEP_GAP_Y),
+                    w: SUBSTEP_CARD_WIDTH,
+                    h: SUBSTEP_CARD_HEIGHT,
+                }));
+                return { cards, fromX: node.x + node.width, fromY: node.y + node.height / 2 };
+            }
+
+            function buildSubstepCard(step, parentId) {
+                const card = document.createElement('div');
+                card.className = 'substep-card' + (step.done ? ' is-done' : '');
+                card.dataset.substepCard = 'true';
+                card.dataset.parent = parentId;
+                card.dataset.substep = step.id;
+
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'substep-toggle';
+                toggle.title = step.done ? 'Снять отметку' : 'Отметить выполненным';
+                toggle.setAttribute('aria-label', toggle.title);
+                toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L9.5 17L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                if (state.readOnly) toggle.disabled = true;
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'substep-title';
+                input.value = step.title;
+                input.placeholder = 'Название подэтапа';
+                input.spellcheck = false;
+                if (state.readOnly) input.readOnly = true;
+
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'substep-delete';
+                del.title = 'Удалить подэтап';
+                del.setAttribute('aria-label', del.title);
+                del.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+                if (state.readOnly) del.disabled = true;
+
+                card.append(toggle, input, del);
+                return card;
+            }
+
+            function renderSubstepCards() {
+                canvasContent.querySelectorAll('[data-substep-card]').forEach(el => el.remove());
+                state.nodes.forEach(node => {
+                    const steps = node.substeps || [];
+                    if (node.type === 'Goal' || !steps.length) return;
+                    const layout = substepLayout(node);
+                    steps.forEach((step, i) => {
+                        const card = buildSubstepCard(step, node.id);
+                        card.style.left = `${layout.cards[i].x}px`;
+                        card.style.top = `${layout.cards[i].y}px`;
+                        card.style.width = `${layout.cards[i].w}px`;
+                        card.style.height = `${layout.cards[i].h}px`;
+                        canvasContent.appendChild(card);
+                    });
+                });
+            }
+
+            function renderSubstepLinks() {
+                const svgNS = 'http://www.w3.org/2000/svg';
+                state.nodes.forEach(node => {
+                    const steps = node.substeps || [];
+                    if (node.type === 'Goal' || !steps.length) return;
+                    const layout = substepLayout(node);
+                    steps.forEach((step, i) => {
+                        const card = layout.cards[i];
+                        if (!card) return;
+                        const cy = card.y + card.h / 2;
+                        const dx = Math.max(20, Math.abs(card.x - layout.fromX) * 0.5);
+                        const path = document.createElementNS(svgNS, 'path');
+                        path.setAttribute('d',
+                            `M ${layout.fromX} ${layout.fromY} C ${layout.fromX + dx} ${layout.fromY}, ${card.x - dx} ${cy}, ${card.x} ${cy}`);
+                        path.setAttribute('class', 'link-path is-substep');
+                        path.dataset.parent = node.id;
+                        linkLayer.appendChild(path);
+                    });
+                });
+            }
+
+            function refreshSubsteps(id) {
+                const node = getNodeById(id);
+                if (!node) return;
+                const layout = substepLayout(node);
+                const cards = canvasContent.querySelectorAll(`[data-substep-card][data-parent="${id}"]`);
+                cards.forEach((card, i) => {
+                    if (!layout.cards[i]) return;
+                    card.style.left = `${layout.cards[i].x}px`;
+                    card.style.top = `${layout.cards[i].y}px`;
+                });
+                linkLayer.querySelectorAll(`path[data-parent="${id}"].is-substep`).forEach((path, i) => {
+                    const card = layout.cards[i];
+                    if (!card) return;
+                    const cy = card.y + card.h / 2;
+                    const dx = Math.max(20, Math.abs(card.x - layout.fromX) * 0.5);
+                    path.setAttribute('d',
+                        `M ${layout.fromX} ${layout.fromY} C ${layout.fromX + dx} ${layout.fromY}, ${card.x - dx} ${cy}, ${card.x} ${cy}`);
+                });
+            }
+
             function renderMiniMap() {
                 miniMapSvg.innerHTML = '';
                 if (!state.nodes.length) return;
@@ -689,6 +767,8 @@
                 updateTransforms();
                 renderNodes();
                 renderLinks();
+                renderSubstepLinks();
+                renderSubstepCards();
                 renderMiniMap();
                 updateStats();
             }
@@ -954,6 +1034,29 @@
                     return;
                 }
 
+                const substepEl = event.target.closest('[data-substep-card]');
+                if (substepEl) {
+                    const parentId = substepEl.dataset.parent;
+                    const stepId = substepEl.dataset.substep;
+                    if (event.target.closest('.substep-toggle')) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleSubstep(parentId, stepId);
+                        return;
+                    }
+                    if (event.target.closest('.substep-delete')) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        removeSubstep(parentId, stepId);
+                        return;
+                    }
+                    if (state.readOnly) return;
+                    if (!event.target.closest('.substep-title')) {
+                        selectNode(parentId);
+                    }
+                    return;
+                }
+
                 if (isActionButton(event.target)) {
                     const nodeId = nodeEl?.dataset.id;
                     if (nodeId) selectNode(nodeId);
@@ -1136,6 +1239,7 @@
                         if (titleEl) fitTitle(titleEl);
                     }
                     refreshLinks(node.id);
+                    refreshSubsteps(node.id);
                     renderMiniMap();
                     return;
                 }
@@ -1152,6 +1256,7 @@
                         el.classList.add('is-dragging');
                     }
                     refreshLinks(node.id);
+                    refreshSubsteps(node.id);
                     renderMiniMap();
                     return;
                 }
@@ -1272,6 +1377,19 @@
                 if (event.target === editingField) editingField = null;
             });
             canvasContent.addEventListener('input', event => {
+                const cardEl = event.target.closest('[data-substep-card]');
+                if (cardEl) {
+                    const parent = getNodeById(cardEl.dataset.parent);
+                    const step = (parent?.substeps || []).find(s => s.id === cardEl.dataset.substep);
+                    if (!step) return;
+                    if (event.target === editingField) {
+                        pushUndo();
+                        editingField = null;
+                    }
+                    step.title = event.target.value;
+                    scheduleSave();
+                    return;
+                }
                 const nodeEl = event.target.closest('[data-node]');
                 if (!nodeEl) return;
                 const node = getNodeById(nodeEl.dataset.id);
