@@ -67,17 +67,19 @@ def _sync_users(session: Session) -> None:
         elif not verify_password(password, user.password_hash) or needs_rehash(user.password_hash):
             user.password_hash = hash_password(password)
             user.role = role
-            logger.info("Пароль пользователя «%s» синхронизирован с конфигурацией", username)
+            session.query(LoginSession).filter(LoginSession.user_id == user.id).delete(
+                synchronize_session=False
+            )
+            logger.info("Пароль пользователя «%s» синхронизирован с конфигурацией, сессии инвалидированы", username)
 
 
 def seed() -> None:
-    if not _has_schema():
-        if ENV == "prod":
-            raise RuntimeError(
-                "Схема БД не создана. В prod миграции выполняет docker-entrypoint (`alembic upgrade head`); "
-                "при ручном запуске выполните: alembic upgrade head"
-            )
-        run_migrations()
+    if ENV == "prod" and not _has_schema():
+        raise RuntimeError(
+            "Схема БД не создана. В prod миграции выполняет docker-entrypoint (`alembic upgrade head`); "
+            "при ручном запуске выполните: alembic upgrade head"
+        )
+    run_migrations()
     session = SessionLocal()
     try:
         now = now_iso()

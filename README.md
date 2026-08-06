@@ -13,14 +13,15 @@
 ## Быстрый старт (Docker + PostgreSQL)
 
 ```sh
-cp .env.example .env        # задайте POSTGRES_PASSWORD, TIMELINE_ADMIN_PASSWORD, TIMELINE_OBSERVER_PASSWORD, DOMAIN
+cp .env.example .env        # задайте POSTGRES_PASSWORD, TIMELINE_ADMIN_PASSWORD, TIMELINE_OBSERVER_PASSWORD
 docker compose up --build
 ```
 
-Caddy отдаёт приложение на `http://localhost` / `https://localhost` (для локальной
-проверки). Для боевого деплоя укажите в `.env` `DOMAIN=ваш-домен` — Caddy
-выпустит Let's Encrypt-сертификат автоматически. Postgres поднимается сервисом
-`db`, миграции применяются при старте контейнера `app` (`alembic upgrade head`).
+Приложение отдаётся напрямую на `http://<хост>:<APP_PORT>` (по умолчанию
+`http://localhost:8000`). Postgres поднимается сервисом `db`, миграции
+применяются при старте контейнера `app` (`alembic upgrade head`, затем `seed()`).
+Для TLS/домена поставьте перед приложением собственный обратный прокси
+(Caddy/nginx) и, если нужно, укажите `FORWARDED_ALLOW_IPS` (см. ниже).
 
 ## Локальная разработка (SQLite)
 
@@ -42,8 +43,7 @@ roadmap и пользователей (пароли берутся из env).
 | Переменная | Описание |
 |---|---|
 | `DATABASE_URL` | DSN базы (`postgresql+psycopg://...` или `sqlite:///...`) |
-| `DOMAIN` | Домен приложения снаружи (для Caddy/TLS, Let's Encrypt) |
-| `FORWARDED_ALLOW_IPS` | Доверенные прокси для `X-Forwarded-For` (за Caddy — `*`) |
+| `FORWARDED_ALLOW_IPS` | Доверенные прокси для `X-Forwarded-For` (по умолчанию `127.0.0.1`; `*` только за доверенным прокси) |
 | `TIMELINE_ADMIN_USER` / `TIMELINE_ADMIN_PASSWORD` | Администратор (полный доступ) |
 | `TIMELINE_OBSERVER_USER` / `TIMELINE_OBSERVER_PASSWORD` | Наблюдатель (только просмотр) |
 | `TIMELINE_LOGIN_MAX_ATTEMPTS` / `TIMELINE_LOGIN_LOCKOUT_SECONDS` | Rate-limit входа |
@@ -54,8 +54,9 @@ env-переменной генерируется разовый пароль и
 
 Смена пароля = изменение `TIMELINE_ADMIN_PASSWORD` / `TIMELINE_OBSERVER_PASSWORD`
 в `.env` и рестарт контейнера: `seed()` синхронизирует пароли и роли с
-конфигурацией (не трогает их, только если значение совпадает). Legacy-хэши
-(старый формат/итерации) автоматически перехешируются на PBKDF2-SHA256 600k.
+конфигурацией (не трогает их, только если значение совпадает) и инвалидирует
+все активные сессии пользователя. Legacy-хэши (старый формат/итерации)
+автоматически перехешируются на PBKDF2-SHA256 600k.
 
 ## Prod-заметки
 
@@ -64,13 +65,21 @@ env-переменной генерируется разовый пароль и
 - **Ресайз воркеров:** gunicorn перезапускает воркер через каждые
   `GUNICORN_MAX_REQUESTS` (по умолчанию 1000, `GUNICORN_MAX_REQUESTS_JITTER`
   рандомизирует момент) — защита от утечек памяти.
+- **Прокси и rate-limit:** по умолчанию `FORWARDED_ALLOW_IPS=127.0.0.1` —
+  заголовок `X-Forwarded-For` игнорируется, лимит входа считает реальные IP.
+  Если за приложением стоит доверенный прокси, укажите его IP (или `*`),
+  иначе клиенты смогут подменять IP и обходить лимит.
 - **Лимит тела:** приложение отвергает запросы > `TIMELINE_MAX_PAYLOAD_BYTES`
-  (в т.ч. без `Content-Length`); Caddy дополнительно режет тело на 3 МБ
-  (`request_body` в Caddyfile).
-- **Бэкапы:** боевые данные — в volume `pgdata`. Регулярно снимайте дампы,
-  например: `docker compose exec db pg_dump -U timeline timeline | gzip > backup-$(date +%F).sql.gz`.
-- **Логи:** `app` пишет запросы и ошибки в stdout (docker logs). Настройте
-  ротацию/сбор логов на уровне оркестрации.
+  (в т.ч. без `Content-Length`).
+- **Статика:** `/static` отдаётся с `Cache-Control: immutable` и версионируется
+  в `index.html` (`?v=`); при изменении статики поднимите номер версии.
+- **Бэкапы:** боевые данные — в volume `pgdata`. Регулярно снимайте дампы:
+  `./backup.sh` (складывает gzip-дампы в `backups/`, хранит последние
+  `BACKUP_RETENTION` дней). Для автоматизации добавьте в cron, например:
+  `0 3 * * * /opt/projects/timeline/backup.sh /opt/projects/timeline`.
+- **Логи:** `app` пишет запросы и ошибки в stdout; docker-compose ограничивает
+  размер логов (`json-file`, 10 МБ × 3 файла). Для централизованного сбора —
+  настройте оркестрацию.
 - **Обновление:** `docker compose up --build --pull` — миграции применятся
   автоматически при старте `app`.
 - **Шрифты:** Satoshi/General Sans подгружаются с внешнего CDN Fontshare
@@ -122,6 +131,7 @@ alembic/         # миграции
 templates/       # frontend (canvas)
 static/          # статика
 tests/           # pytest
+backup.sh        # pg_dump-бэкап (docker compose exec)
 ```
 
 ## API
@@ -134,7 +144,7 @@ tests/           # pytest
 | GET | `/api/roadmaps` | авторизованный | Список roadmap (сводки) |
 | GET | `/api/roadmaps/{id}` | авторизованный | Детали roadmap |
 | POST | `/api/roadmaps` | admin | Создать roadmap |
-| PUT | `/api/roadmaps/{id}` | admin | Обновить (конфликт → 409 по `base_version`) |
+| PUT | `/api/roadmaps/{id}` | admin | Обновить; `base_version` на верхнем уровне тела → конфликт 409 при устаревшей версии |
 | DELETE | `/api/roadmaps/{id}` | admin | Удалить |
 | GET | `/api/health` | публичный | Health-check (БД) |
 

@@ -85,27 +85,7 @@ def update_roadmap(
     _: User = Depends(require_admin),
     session: Session = Depends(get_db),
 ) -> JSONResponse:
-    if data.base_version is not None:
-        result = session.execute(
-            sa_update(Roadmap)
-            .where(Roadmap.id == roadmap_id, Roadmap.version == data.base_version)
-            .values(
-                name=data.name,
-                payload=data.payload,
-                version=Roadmap.version + 1,
-                updated_at=func.current_timestamp(),
-            )
-        )
-        session.commit()
-        if result.rowcount == 0:
-            if session.get(Roadmap, roadmap_id) is None:
-                raise HTTPException(status_code=404, detail="Roadmap not found")
-            raise HTTPException(status_code=409, detail="Roadmap изменён в другом месте, обновите страницу")
-        return JSONResponse({"ok": True, "version": data.base_version + 1})
-    roadmap = session.get(Roadmap, roadmap_id)
-    if roadmap is None:
-        raise HTTPException(status_code=404, detail="Roadmap not found")
-    session.execute(
+    stmt = (
         sa_update(Roadmap)
         .where(Roadmap.id == roadmap_id)
         .values(
@@ -114,9 +94,18 @@ def update_roadmap(
             version=Roadmap.version + 1,
             updated_at=func.current_timestamp(),
         )
+        .returning(Roadmap.version)
     )
+    if data.base_version is not None:
+        stmt = stmt.where(Roadmap.version == data.base_version)
+    result = session.execute(stmt)
+    row = result.first()
     session.commit()
-    return JSONResponse({"ok": True, "version": roadmap.version + 1})
+    if row is None:
+        if session.query(Roadmap.id).filter_by(id=roadmap_id).first() is None:
+            raise HTTPException(status_code=404, detail="Roadmap not found")
+        raise HTTPException(status_code=409, detail="Roadmap изменён в другом месте, обновите страницу")
+    return JSONResponse({"ok": True, "version": row[0]})
 
 
 @router.delete("/{roadmap_id}")

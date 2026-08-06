@@ -65,6 +65,7 @@
             };
 
             let saveTimer = null;
+            let saveChain = Promise.resolve();
             let pendingDeleteId = null;
             let pendingDeleteTimer = null;
             let editingField = null;
@@ -119,44 +120,61 @@
             function scheduleSave() {
                 if (state.readOnly || state.currentId == null) return;
                 clearTimeout(saveTimer);
-                saveTimer = setTimeout(saveCurrent, 600);
+                saveTimer = setTimeout(enqueueSave, 600);
             }
 
             function flushSave() {
                 if (state.readOnly || state.currentId == null || !saveTimer) return;
                 clearTimeout(saveTimer);
                 saveTimer = null;
-                saveCurrent();
+                enqueueSave();
             }
 
-            async function saveCurrent() {
-                if (state.readOnly || state.currentId == null) return;
+            function buildSaveBody() {
                 const name = (templateNameInput.value.trim() || state.currentName || 'Без названия').trim();
                 const payload = {
                     nodes: state.nodes.map(n => ({ ...n })),
                     links: state.links.map(l => ({ ...l })),
                     uid: state.uid,
                     viewport: { panX: state.panX, panY: state.panY, scale: state.scale },
-                    base_version: state.version,
                 };
+                return { name, payload, base_version: state.version };
+            }
+
+            async function doSave(body) {
+                if (state.readOnly || state.currentId == null) return;
+                const saveId = state.currentId;
                 try {
-                    const saved = await api(`/api/roadmaps/${state.currentId}`, {
+                    const saved = await api(`/api/roadmaps/${saveId}`, {
                         method: 'PUT',
-                        body: JSON.stringify({ name, payload }),
+                        body: JSON.stringify(body),
                     });
+                    if (state.currentId !== saveId) return;
                     state.version = saved.version;
-                    if (name !== state.currentName) {
-                        state.currentName = name;
+                    if (body.name !== state.currentName) {
+                        state.currentName = body.name;
                         await refreshTemplates();
                     }
                 } catch (e) {
+                    if (state.currentId !== saveId) return;
                     if (e.status === 409) {
                         showToast('⚠️ Схема изменена в другом окне, обновлено');
-                        await switchTemplate(state.currentId);
+                        await switchTemplate(saveId);
                         return;
                     }
                     showToast('⚠️ Не удалось сохранить шаблон');
                 }
+            }
+
+            function enqueueSave() {
+                const body = buildSaveBody();
+                saveChain = saveChain.then(() => doSave(body)).catch(() => {});
+                return saveChain;
+            }
+
+            async function saveCurrent() {
+                if (state.readOnly || state.currentId == null) return;
+                return enqueueSave();
             }
 
             async function refreshTemplates() {
@@ -1359,6 +1377,10 @@
 
             window.addEventListener('pagehide', () => {
                 flushSave();
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') flushSave();
             });
 
             setTheme(state.theme);

@@ -156,6 +156,21 @@ def test_update_conflict_409(client, admin_headers):
     assert got["version"] == 0
 
 
+def test_update_conflict_via_frontend_contract(client, admin_headers):
+    rid = _create(client, admin_headers)["id"]
+
+    def body(version):
+        return {"name": "A", "payload": _payload(), "base_version": version}
+
+    first = client.put(f"/api/roadmaps/{rid}", headers=admin_headers, json=body(0))
+    assert first.status_code == 200
+    assert first.json()["version"] == 1
+    stale = client.put(f"/api/roadmaps/{rid}", headers=admin_headers, json=body(0))
+    assert stale.status_code == 409
+    got = client.get(f"/api/roadmaps/{rid}", headers=admin_headers).json()
+    assert got["version"] == 1
+
+
 def test_update_bumps_updated_at(client, admin_headers):
     rid = _create(client, admin_headers)["id"]
     before = datetime.fromisoformat(

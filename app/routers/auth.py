@@ -9,7 +9,7 @@ from app.db import get_db
 from app.limiter import login_limiter
 from app.models import User
 from app.schemas import LoginRequest
-from app.security import DUMMY_HASH, verify_password
+from app.security import dummy_hash, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -24,7 +24,7 @@ def login(data: LoginRequest, request: Request, session: Session = Depends(get_d
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
     user = session.query(User).filter_by(username=username).first()
     if user is None:
-        verify_password(data.password, DUMMY_HASH)
+        verify_password(data.password, dummy_hash())
         login_limiter.failure(session, client_ip)
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
     if not verify_password(data.password, user.password_hash):

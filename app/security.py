@@ -66,4 +66,12 @@ def needs_rehash(stored: str) -> bool:
     )
 
 
-DUMMY_HASH = hash_password("__dummy__")
+_DUMMY_HASH: str | None = None
+
+
+def dummy_hash() -> str:
+    """Возвращает хэш заведомо неверного пароля (для имитации проверки при несуществующем пользователе)."""
+    global _DUMMY_HASH
+    if _DUMMY_HASH is None:
+        _DUMMY_HASH = hash_password("__dummy__")
+    return _DUMMY_HASH
