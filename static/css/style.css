@@ -934,108 +934,94 @@
             opacity: 0.85;
         }
 
-        .substep-card {
+        .substep-node {
             position: absolute;
+            width: 20rem;
+            min-height: 10.5rem;
             display: flex;
-            align-items: center;
-            gap: 0.55rem;
-            padding: 0 0.7rem;
-            border-radius: 1rem;
+            flex-direction: column;
+            gap: var(--space-3);
+            padding: var(--space-4);
+            padding-bottom: var(--space-3);
+            border-radius: 1.45rem;
             border: 1px solid var(--color-border);
             background:
                 linear-gradient(180deg, color-mix(in srgb, var(--color-surface-2) 92%, transparent), color-mix(in srgb, var(--color-surface) 92%, transparent));
-            box-shadow: var(--shadow-md);
-            box-sizing: border-box;
+            box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            transform: translate3d(0, 0, 0);
+            transition: box-shadow var(--transition-interactive), border-color var(--transition-interactive);
             user-select: none;
-            -webkit-user-select: none;
+            box-sizing: border-box;
             z-index: 4;
             cursor: default;
-            transition: box-shadow var(--transition-interactive), border-color var(--transition-interactive);
         }
-        .substep-card:hover {
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent), var(--shadow-md);
+        .substep-node:hover {
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent), var(--shadow-lg);
         }
-        .substep-card.is-done {
+        .substep-node.is-done {
             border-color: color-mix(in srgb, var(--color-success) 58%, transparent);
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-success) 36%, transparent), var(--shadow-md);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-success) 40%, transparent), 0 0 0 12px color-mix(in srgb, var(--color-success) 9%, transparent), var(--shadow-lg);
+        }
+        .substep-node.is-selected {
+            border-color: color-mix(in srgb, var(--color-primary) 52%, transparent);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 38%, transparent), 0 0 0 12px var(--node-glow), var(--shadow-lg);
+        }
+        .substep-node.is-done.is-selected {
+            border-color: color-mix(in srgb, var(--color-success) 78%, transparent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 70%, transparent), 0 0 0 16px color-mix(in srgb, var(--color-success) 13%, transparent), var(--shadow-lg);
         }
 
-        .substep-card .substep-toggle {
-            display: grid;
-            place-items: center;
+        .substep-node-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--space-3);
+            pointer-events: none;
             flex-shrink: 0;
-            width: 1.55rem;
-            height: 1.55rem;
-            border-radius: 50%;
-            color: transparent;
-            background: color-mix(in srgb, var(--color-surface) 80%, transparent);
-            border: 1.5px solid var(--color-text-faint);
-            cursor: pointer;
-            transition: color var(--transition-interactive), background var(--transition-interactive), border-color var(--transition-interactive);
         }
-        .substep-card .substep-toggle svg {
-            width: 13px;
-            height: 13px;
-        }
-        .substep-card .substep-toggle:hover {
-            border-color: var(--color-success);
-            color: var(--color-success);
-        }
-        .substep-card.is-done .substep-toggle {
-            color: var(--color-surface);
-            background: var(--color-success);
-            border-color: var(--color-success);
-        }
-
-        .substep-card .substep-title {
-            flex: 1;
+        .substep-node-header-main {
+            display: grid;
+            gap: 0.35rem;
             min-width: 0;
-            border: none;
-            background: transparent;
-            outline: none;
-            color: var(--color-text);
-            font-size: var(--text-sm);
-            font-weight: 600;
-            border-bottom: 1px dashed transparent;
-            padding: 0.15rem 0;
+            flex: 1;
             pointer-events: auto;
-            transition: border-color var(--transition-interactive);
         }
-        .substep-card .substep-title:hover {
-            border-bottom-color: var(--color-divider);
+        .substep-node-type {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            padding: 0.28rem 0.65rem;
+            border-radius: var(--radius-full);
+            font-size: var(--text-xs);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--color-primary);
+            background: var(--color-primary-soft);
+            user-select: none;
         }
-        .substep-card .substep-title:focus {
-            border-bottom-color: var(--color-primary);
-        }
-        .substep-card.is-done .substep-title {
-            color: var(--color-success);
-            text-decoration: line-through;
+        .substep-node-actions {
+            display: flex;
+            gap: 0.45rem;
+            flex-shrink: 0;
+            pointer-events: auto;
         }
 
-        .substep-card .substep-delete {
-            display: grid;
-            place-items: center;
+        .substep-node-note {
+            min-height: 0;
+            max-height: none;
+            flex: 1;
+        }
+
+        .substep-node-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-3);
+            padding-top: var(--space-2);
+            border-top: 1px solid var(--color-divider);
             flex-shrink: 0;
-            width: 1.5rem;
-            height: 1.5rem;
-            border-radius: 0.5rem;
-            color: var(--color-text-faint);
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            opacity: 0;
-            transition: opacity var(--transition-interactive), color var(--transition-interactive), background var(--transition-interactive);
-        }
-        .substep-card:hover .substep-delete {
-            opacity: 1;
-        }
-        .substep-card .substep-delete:hover {
-            color: #e0556a;
-            background: rgba(224, 85, 106, 0.15);
-        }
-        .substep-card .substep-delete svg {
-            width: 12px;
-            height: 12px;
+            pointer-events: auto;
         }
 
         .node-footer {
@@ -1503,12 +1489,6 @@
             pointer-events: none;
             cursor: default;
         }
-        .is-viewer .substep-add,
-        .is-viewer .substep-delete,
-        .is-viewer .substep-toggle {
+        .is-viewer .substep-add {
             display: none !important;
-        }
-        .is-viewer .substep-title {
-            pointer-events: none;
-            cursor: default;
         }

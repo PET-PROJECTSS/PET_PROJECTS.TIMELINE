@@ -38,10 +38,10 @@
             const MIN_NODE_WIDTH = 220;
             const MIN_NODE_HEIGHT = 150;
             const DRAG_THRESHOLD = 4;
-            const SUBSTEP_CARD_WIDTH = 210;
-            const SUBSTEP_CARD_HEIGHT = 46;
-            const SUBSTEP_GAP_X = 46;
-            const SUBSTEP_GAP_Y = 10;
+            const SUBSTEP_NODE_WIDTH = 320;
+            const SUBSTEP_NODE_HEIGHT = 200;
+            const SUBSTEP_GAP_X = 60;
+            const SUBSTEP_GAP_Y = 30;
 
             const state = {
                 theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
@@ -588,50 +588,85 @@
             function substepLayout(node) {
                 const steps = node.substeps || [];
                 const count = steps.length;
-                const totalH = count * SUBSTEP_CARD_HEIGHT + (count - 1) * SUBSTEP_GAP_Y;
+                const totalH = count * SUBSTEP_NODE_HEIGHT + (count - 1) * SUBSTEP_GAP_Y;
                 const cardX = node.x + node.width + SUBSTEP_GAP_X;
                 const startY = node.y + node.height / 2 - totalH / 2;
                 const cards = steps.map((s, i) => ({
                     x: cardX,
-                    y: startY + i * (SUBSTEP_CARD_HEIGHT + SUBSTEP_GAP_Y),
-                    w: SUBSTEP_CARD_WIDTH,
-                    h: SUBSTEP_CARD_HEIGHT,
+                    y: startY + i * (SUBSTEP_NODE_HEIGHT + SUBSTEP_GAP_Y),
+                    w: SUBSTEP_NODE_WIDTH,
+                    h: SUBSTEP_NODE_HEIGHT,
                 }));
                 return { cards, fromX: node.x + node.width, fromY: node.y + node.height / 2 };
             }
 
             function buildSubstepCard(step, parentId) {
-                const card = document.createElement('div');
-                card.className = 'substep-card' + (step.done ? ' is-done' : '');
+                const card = document.createElement('article');
+                card.className = 'substep-node' + (step.done ? ' is-done' : '');
                 card.dataset.substepCard = 'true';
                 card.dataset.parent = parentId;
                 card.dataset.substep = step.id;
 
-                const toggle = document.createElement('button');
-                toggle.type = 'button';
-                toggle.className = 'substep-toggle';
-                toggle.title = step.done ? 'Снять отметку' : 'Отметить выполненным';
-                toggle.setAttribute('aria-label', toggle.title);
-                toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L9.5 17L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-                if (state.readOnly) toggle.disabled = true;
+                const header = document.createElement('div');
+                header.className = 'substep-node-header';
 
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.className = 'substep-title';
-                input.value = step.title;
-                input.placeholder = 'Название подэтапа';
-                input.spellcheck = false;
-                if (state.readOnly) input.readOnly = true;
+                const headerMain = document.createElement('div');
+                headerMain.className = 'substep-node-header-main';
+
+                const typeEl = document.createElement('span');
+                typeEl.className = 'substep-node-type';
+                typeEl.textContent = 'Подэтап';
+
+                const title = document.createElement('textarea');
+                title.rows = 1;
+                title.className = 'node-title substep-node-title';
+                title.value = step.title;
+                title.placeholder = 'Название подэтапа';
+                title.spellcheck = false;
+                if (state.readOnly) title.readOnly = true;
+
+                headerMain.append(typeEl, title);
+
+                const actions = document.createElement('div');
+                actions.className = 'substep-node-actions';
+
+                const complete = document.createElement('button');
+                complete.type = 'button';
+                complete.className = 'icon-btn complete-btn';
+                complete.classList.toggle('is-on', !!step.done);
+                complete.title = step.done ? 'Снять отметку' : 'Отметить выполненным';
+                complete.setAttribute('aria-label', complete.title);
+                complete.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L9.5 17L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                if (state.readOnly) complete.disabled = true;
 
                 const del = document.createElement('button');
                 del.type = 'button';
-                del.className = 'substep-delete';
+                del.className = 'icon-btn delete-btn';
                 del.title = 'Удалить подэтап';
                 del.setAttribute('aria-label', del.title);
-                del.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+                del.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7H20M9 7V5.8C9 5.358 9.358 5 9.8 5H14.2C14.642 5 15 5.358 15 5.8V7M7.5 7V18.2C7.5 18.642 7.858 19 8.3 19H15.7C16.142 19 16.5 18.642 16.5 18.2V7M10 10.5V15.5M14 10.5V15.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
                 if (state.readOnly) del.disabled = true;
 
-                card.append(toggle, input, del);
+                actions.append(complete, del);
+                header.append(headerMain, actions);
+
+                const note = document.createElement('textarea');
+                note.className = 'node-text substep-node-note';
+                note.value = step.note || '';
+                note.placeholder = 'Комментарий по подэтапу';
+                note.spellcheck = false;
+                if (state.readOnly) note.readOnly = true;
+
+                const footer = document.createElement('div');
+                footer.className = 'substep-node-footer';
+
+                const status = document.createElement('div');
+                status.className = 'node-status substep-node-status';
+                status.classList.toggle('is-done', !!step.done);
+                status.textContent = step.done ? 'Выполнено' : 'В работе';
+
+                footer.appendChild(status);
+                card.append(header, note, footer);
                 return card;
             }
 
@@ -648,6 +683,8 @@
                         card.style.width = `${layout.cards[i].w}px`;
                         card.style.height = `${layout.cards[i].h}px`;
                         canvasContent.appendChild(card);
+                        const titleEl = card.querySelector('.node-title');
+                        if (titleEl) fitTitle(titleEl);
                     });
                 });
             }
@@ -817,7 +854,7 @@
                 const node = getNodeById(nodeId);
                 if (!node || node.type === 'Goal') return;
                 pushUndo();
-                node.substeps = [...(node.substeps || []), { id: `step-${++state.uid}`, title: '', done: false }];
+                node.substeps = [...(node.substeps || []), { id: `step-${++state.uid}`, title: '', note: '', done: false }];
                 syncNodeDoneFromSubsteps(node);
                 requestRender();
             }
@@ -1005,8 +1042,7 @@
                     el.closest('[data-resize-handle]') ||
                     el.closest('.node-type') ||
                     el.closest('.substep-add') ||
-                    el.closest('.substep-toggle') ||
-                    el.closest('.substep-delete');
+                    el.closest('.node-type');
             }
 
             function isFormField(el) {
@@ -1038,20 +1074,20 @@
                 if (substepEl) {
                     const parentId = substepEl.dataset.parent;
                     const stepId = substepEl.dataset.substep;
-                    if (event.target.closest('.substep-toggle')) {
+                    if (event.target.closest('.complete-btn')) {
                         event.preventDefault();
                         event.stopPropagation();
                         toggleSubstep(parentId, stepId);
                         return;
                     }
-                    if (event.target.closest('.substep-delete')) {
+                    if (event.target.closest('.delete-btn')) {
                         event.preventDefault();
                         event.stopPropagation();
                         removeSubstep(parentId, stepId);
                         return;
                     }
                     if (state.readOnly) return;
-                    if (!event.target.closest('.substep-title')) {
+                    if (!event.target.closest('.node-title') && !event.target.closest('.node-text')) {
                         selectNode(parentId);
                     }
                     return;
@@ -1123,20 +1159,6 @@
                         event.preventDefault();
                         event.stopPropagation();
                         addSubstep(nodeId);
-                        return;
-                    }
-                    if (event.target.closest('.substep-toggle') && nodeId) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        const stepEl = event.target.closest('[data-substep]');
-                        if (stepEl) toggleSubstep(nodeId, stepEl.dataset.substep);
-                        return;
-                    }
-                    if (event.target.closest('.substep-delete') && nodeId) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        const stepEl = event.target.closest('[data-substep]');
-                        if (stepEl) removeSubstep(nodeId, stepEl.dataset.substep);
                         return;
                     }
                     return;
@@ -1386,7 +1408,11 @@
                         pushUndo();
                         editingField = null;
                     }
-                    step.title = event.target.value;
+                    if (event.target.classList.contains('node-text')) {
+                        step.note = event.target.value;
+                    } else {
+                        step.title = event.target.value;
+                    }
                     scheduleSave();
                     return;
                 }
@@ -1414,10 +1440,6 @@
                         const labelEl = linkLabels.querySelector(`[data-link-label="${link.id}"]`);
                         if (labelEl) labelEl.textContent = link.label;
                     }
-                } else if (event.target.classList.contains('substep-title')) {
-                    const stepEl = event.target.closest('[data-substep]');
-                    const step = (node.substeps || []).find(s => s.id === stepEl?.dataset.substep);
-                    if (step) step.title = value;
                 }
                 scheduleSave();
             });
