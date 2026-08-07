@@ -426,8 +426,12 @@
             function toggleTheme() { setTheme(state.theme === 'dark' ? 'light' : 'dark'); }
 
             function updateGridBackground() {
-                const gridTransform = `translate(${state.panX}px, ${state.panY}px) scale(${state.scale})`;
-                canvasGridLayer.style.transform = gridTransform;
+                const minor = 40 * state.scale;
+                const major = 200 * state.scale;
+                const pos = `${state.panX}px ${state.panY}px`;
+                canvasGridLayer.style.backgroundSize =
+                    `${minor}px ${minor}px, ${minor}px ${minor}px, ${major}px ${major}px, ${major}px ${major}px`;
+                canvasGridLayer.style.backgroundPosition = `${pos}, ${pos}, ${pos}, ${pos}`;
             }
 
             function updateTransforms() {
